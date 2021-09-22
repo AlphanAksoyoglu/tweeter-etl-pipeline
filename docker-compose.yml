@@ -1,0 +1,67 @@
+version: '3' #Version of Docker Compose
+
+services:
+
+  # 1. Container Tweet_Collector
+  tweet_collector:
+    container_name: tweet_collector
+    build: tweet_collector/
+    volumes:
+    - ./tweet_collector/:/app
+    depends_on: # Dumps to mongodb thus mongodb container is necessary
+      - mongodb
+    environment: #Needs these keys declared as env_vars in your system
+      - TW_API_KEY=${TW_API_KEY}
+      - TW_API_SECRET=${TW_API_SECRET}
+      - TW_ACC_TOKEN=${TW_ACC_TOKEN}
+      - TW_ACC_SECRET=${TW_ACC_SECRET}
+
+  # 2. Container MongoDB
+  mongodb:
+    container_name: mongo
+    image: mongo # mongo image from Docker-Hub
+    ports: # port connection on_local_machine:inside_of_container
+    - 27018:27017
+
+  # 3. Container Python_ETL_Script
+  etl_job:
+    container_name: etl_job
+    build: etl_job/
+    volumes:
+    - ./etl_job/:/app
+    depends_on: #This reads from mongodb and writes to postgres hence requires both
+    - mongodb
+    - postgresdb
+    restart: on-failure
+    environment: #Needs these keys declared as env_vars in your system
+    - POSTGRES_USER=${TW_PG_USER}
+    - POSTGRES_PASSWORD=${TW_PG_PASS}
+    - POSTGRES_DB=${TW_PG_DBNAME}
+  
+
+  # 4. Container Postgres
+  postgresdb:
+    container_name: postgres
+    image: postgres # postgres image from Docker-Hub
+    ports: # port connection on_local_machine:inside_of_container
+    - "5555:5432"
+    environment: #Needs these keys declared as env_vars in your system
+    - POSTGRES_USER=${TW_PG_USER}
+    - POSTGRES_PASSWORD=${TW_PG_PASS}
+    - POSTGRES_DB=${TW_PG_DBNAME}
+
+
+  # 5. Container Python_SlackBot_SCript
+  slackbot:
+    container_name: slackbot
+    build: slackbot/
+    volumes:
+    - ./slackbot/:/app
+    depends_on: # This reads from postgres thus requires postgres to run
+    - postgresdb
+    restart: on-failure
+    environment: #Needs these keys declared as env_vars in your system
+    - POSTGRES_USER=${TW_PG_USER}
+    - POSTGRES_PASSWORD=${TW_PG_PASS}
+    - POSTGRES_DB=${TW_PG_DBNAME}
+    - WEBHOOK=${TT_SLACK_WEBHOOK}
